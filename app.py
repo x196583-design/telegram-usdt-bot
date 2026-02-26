@@ -83,7 +83,7 @@ async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
-        await asyncio.sleep(30)
+    
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
