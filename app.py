@@ -5,7 +5,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot 已成功運行！")
+    chat_id = update.effective_chat.id
+    print("CHAT ID:", chat_id)
+    await update.message.reply_text("✅ Bot 已啟動")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
