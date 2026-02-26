@@ -2,32 +2,21 @@ import os
 import psycopg2
 import requests
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from tronpy.keys import PrivateKey
-
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 TRONGRID_API_KEY = os.getenv("TRONGRID_API_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 USDT_CONTRACT = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"
+PORT = int(os.environ.get("PORT", 10000))
 
-
-# -----------------------
-# Database
-# -----------------------
 
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
 
-
-# -----------------------
-# Wallet
-# -----------------------
 
 def create_tron_wallet():
     private_key = PrivateKey.random()
@@ -35,13 +24,7 @@ def create_tron_wallet():
     return address, private_key.hex()
 
 
-# -----------------------
-# Commands
-# -----------------------
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("START HANDLER TRIGGERED FROM RENDER")
-
     telegram_id = update.effective_user.id
 
     conn = get_connection()
@@ -57,7 +40,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address = result[0]
     else:
         address, private_key = create_tron_wallet()
-
         cur.execute(
             """
             INSERT INTO users (telegram_id, wallet_address, private_key)
@@ -76,11 +58,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# -----------------------
-# Deposit Checker
-# -----------------------
-
 async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
+    print("Deposit job running...")
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -88,12 +68,10 @@ async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
     users = cur.fetchall()
 
     for user_id, telegram_id, wallet_address in users:
-
         url = f"https://api.trongrid.io/v1/accounts/{wallet_address}/transactions/trc20"
         headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
 
         response = requests.get(url, headers=headers, timeout=15)
-
         if response.status_code != 200:
             continue
 
@@ -101,7 +79,6 @@ async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
 
         if "data" in data:
             for tx in data["data"]:
-
                 if tx["token_info"]["address"] != USDT_CONTRACT:
                     continue
 
@@ -110,7 +87,7 @@ async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
 
                 cur.execute(
                     "SELECT 1 FROM deposits WHERE tx_hash = %s",
-                    (tx_hash,),
+                    (tx_hash,)
                 )
 
                 if not cur.fetchone():
@@ -132,27 +109,22 @@ async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
 
-# -----------------------
-# Main
-# -----------------------
-
 def main():
-    app = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .concurrent_updates(False)
-        .build()
-    )
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
-    # 每 30 秒檢查一次
     app.job_queue.run_repeating(check_deposits, interval=30, first=10)
 
-    app.run_polling(
-        drop_pending_updates=True
+    print("Starting webhook...")
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
 
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
