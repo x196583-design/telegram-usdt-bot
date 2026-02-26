@@ -47,42 +47,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"你的專屬 USDT(TRC20) 收款地址：\n\n{wallet_address}"
     )
 
-async def check_deposits(app):
-    while True:
-        conn = get_connection()
-        cur = conn.cursor()
+async def check_deposits(context: ContextTypes.DEFAULT_TYPE):
+    conn = get_connection()
+    cur = conn.cursor()
 
-        cur.execute("SELECT id, telegram_id, wallet_address FROM users")
-        users = cur.fetchall()
+    cur.execute("SELECT id, telegram_id, wallet_address FROM users")
+    users = cur.fetchall()
 
-        for user_id, telegram_id, wallet_address in users:
-            url = f"https://api.trongrid.io/v1/accounts/{wallet_address}/transactions/trc20"
-            headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
+    for user_id, telegram_id, wallet_address in users:
+        url = f"https://api.trongrid.io/v1/accounts/{wallet_address}/transactions/trc20"
+        headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
 
-            response = requests.get(url, headers=headers)
-            data = response.json()
+        response = requests.get(url, headers=headers)
+        data = response.json()
 
-            if "data" in data:
-                for tx in data["data"]:
-                    if tx["token_info"]["address"] == USDT_CONTRACT:
-                        tx_hash = tx["transaction_id"]
-                        amount = int(tx["value"]) / 1_000_000
+        if "data" in data:
+            for tx in data["data"]:
+                if tx["token_info"]["address"] == USDT_CONTRACT:
+                    tx_hash = tx["transaction_id"]
+                    amount = int(tx["value"]) / 1_000_000
 
-                        cur.execute("SELECT 1 FROM deposits WHERE tx_hash = %s", (tx_hash,))
-                        if not cur.fetchone():
-                            cur.execute(
-                                "INSERT INTO deposits (user_id, tx_hash, amount, confirmed) VALUES (%s, %s, %s, true)",
-                                (user_id, tx_hash, amount)
-                            )
-                            conn.commit()
+                    cur.execute("SELECT 1 FROM deposits WHERE tx_hash = %s", (tx_hash,))
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO deposits (user_id, tx_hash, amount, confirmed) VALUES (%s, %s, %s, true)",
+                            (user_id, tx_hash, amount)
+                        )
+                        conn.commit()
 
-                            await app.bot.send_message(
-                                chat_id=telegram_id,
-                                text=f"💰 收到 {amount} USDT 入帳！"
-                            )
+                        await context.bot.send_message(
+                            chat_id=telegram_id,
+                            text=f"💰 收到 {amount} USDT 入帳！"
+                        )
 
-        cur.close()
-        conn.close()
+    cur.close()
+    conn.close()
 
         await asyncio.sleep(30)
 
@@ -90,8 +89,8 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    # 啟動背景監聽任務
-    app.create_task(check_deposits(app))
+    # 每 30 秒執行一次
+    app.job_queue.run_repeating(check_deposits, interval=30, first=10)
 
     app.run_polling()
 
