@@ -1,3 +1,4 @@
+print("🔥🔥🔥 RENDER INSTANCE ACTIVE 🔥🔥🔥")
 import os
 import psycopg2
 import requests
