@@ -1,5 +1,4 @@
 import os
-import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from tronpy.keys import PrivateKey
@@ -18,11 +17,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"你的專屬 USDT(TRC20) 收款地址：\n\n{address}"
     )
 
-async def main():
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
